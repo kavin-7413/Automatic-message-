@@ -1,0 +1,142 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Social Scheduler</title>
+    <style>
+        :root { --primary: #075E54; --secondary: #E1306C; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
+        h1 { font-size: 22px; color: var(--primary); text-align: center; }
+        label { display: block; margin: 10px 0 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; margin-bottom: 10px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; font-size: 16px; }
+        .btn-save { background: var(--primary); margin-bottom: 20px; }
+        
+        .queue-section { width: 100%; max-width: 500px; margin-top: 30px; }
+        .task-card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        .task-card.ig { border-left-color: var(--secondary); }
+        .status-pending { color: orange; font-weight: bold; font-size: 12px; }
+        .status-done { color: green; font-weight: bold; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Social Scheduler (Local)</h1>
+    
+    <label>Select Platform & Action</label>
+    <select id="type">
+        <option value="wa-msg">WhatsApp Message (Chat)</option>
+        <option value="wa-status">WhatsApp Status (Manual Sync)</option>
+        <option value="ig-msg">Instagram DM</option>
+        <option value="ig-story">Instagram Story (Upload)</option>
+    </select>
+
+    <label>Phone Number / Username</label>
+    <input type="text" id="target" placeholder="e.g. 1234567890 or @username">
+
+    <label>Message Content</label>
+    <textarea id="message" rows="3" placeholder="Write your content here..."></textarea>
+
+    <label>Date & Time</label>
+    <input type="datetime-local" id="time">
+
+    <button class="btn-save" onclick="saveTask()">Schedule Task</button>
+</div>
+
+<div class="queue-section">
+    <h3>Upcoming Schedule</h3>
+    <div id="queue-container"></div>
+</div>
+
+<script>
+    // 1. Save Data to LocalStorage
+    function saveTask() {
+        const task = {
+            id: Date.now(),
+            type: document.getElementById('type').value,
+            target: document.getElementById('target').value,
+            message: document.getElementById('message').value,
+            time: document.getElementById('time').value,
+            status: 'pending'
+        };
+
+        if(!task.message || !task.time) return alert("Fill all fields!");
+
+        let tasks = JSON.parse(localStorage.getItem('socialTasks')) || [];
+        tasks.push(task);
+        localStorage.setItem('socialTasks', JSON.stringify(tasks));
+        
+        renderTasks();
+        alert("Task saved to browser storage!");
+    }
+
+    // 2. Display Tasks from LocalStorage
+    function renderTasks() {
+        const container = document.getElementById('queue-container');
+        const tasks = JSON.parse(localStorage.getItem('socialTasks')) || [];
+        container.innerHTML = '';
+
+        tasks.forEach(t => {
+            const div = document.createElement('div');
+            div.className = `task-card ${t.type.includes('ig') ? 'ig' : ''}`;
+            div.innerHTML = `
+                <div>
+                    <strong>${t.type.toUpperCase()}</strong><br>
+                    <small>${t.time.replace('T', ' ')}</small><br>
+                    <span>${t.message.substring(0, 30)}...</span>
+                </div>
+                <span class="status-${t.status}">${t.status.toUpperCase()}</span>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    // 3. The "Automation" Heartbeat (Checks every 5 seconds)
+    setInterval(() => {
+        let tasks = JSON.parse(localStorage.getItem('socialTasks')) || [];
+        let now = new Date();
+        let updated = false;
+
+        tasks.forEach(t => {
+            let taskTime = new Date(t.time);
+            
+            if (t.status === 'pending' && now >= taskTime) {
+                t.status = 'done';
+                updated = true;
+                triggerPost(t);
+            }
+        });
+
+        if (updated) {
+            localStorage.setItem('socialTasks', JSON.stringify(tasks));
+            renderTasks();
+        }
+    }, 5000);
+
+    // 4. Trigger Action (Redirects)
+    function triggerPost(task) {
+        alert(`TIME TO POST: ${task.type}\nContent: ${task.message}`);
+        
+        let url = "";
+        if(task.type === 'wa-msg') {
+            url = `https://wa.me/${task.target}?text=${encodeURIComponent(task.message)}`;
+        } else if(task.type === 'wa-status') {
+            url = `https://web.whatsapp.com/`; // WhatsApp doesn't allow direct status API
+        } else if(task.type === 'ig-msg') {
+            url = `https://www.instagram.com/direct/inbox/`;
+        } else {
+            url = `https://www.instagram.com/`;
+        }
+        
+        window.open(url, '_blank');
+    }
+
+    // Initial Load
+    renderTasks();
+</script>
+
+</body>
+</html>
